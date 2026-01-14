@@ -7,7 +7,7 @@ import {
 
 const SkillSyncApp = () => {
 
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyCH3E3VasVbkxfCZe-SZW4jzHcUndBDau8");
+  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyCz5gVwB1T1Hylf3LYWv9k1bVzG2lBRckI");
   
   const [showSplash, setShowSplash] = useState(true);
   const [step, setStep] = useState('input'); 
