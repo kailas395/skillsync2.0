@@ -1,60 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Briefcase, ArrowRight, Target, Zap, Map, Loader2, 
-  ChevronRight, Share2, Download, X, 
-  Building2, Globe, Mail, ExternalLink, Award, AlertCircle 
-} from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import {
+  Briefcase,
+  ArrowRight,
+  Target,
+  Zap,
+  Map,
+  Loader2,
+  ChevronRight,
+  Share2,
+  Download,
+  Building2,
+  Globe,
+  Mail,
+  ExternalLink,
+  Award,
+  AlertCircle,
+  X,
+} from "lucide-react";
 
-const SkillSyncApp = () => {
-
+export default function SkillSyncApp() {
+  // ✅ API KEY (Vercel compatible)
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
+  // ✅ App state
   const [showSplash, setShowSplash] = useState(true);
-  const [step, setStep] = useState('input'); 
-  const [targetRole, setTargetRole] = useState('');
-  const [currentSkills, setCurrentSkills] = useState('');
+  const [step, setStep] = useState("input");
+  const [targetRole, setTargetRole] = useState("");
+  const [currentSkills, setCurrentSkills] = useState("");
   const [skillsList, setSkillsList] = useState([]);
   const [analysisResult, setAnalysisResult] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
+  // Splash screen
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 2000);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setShowSplash(false), 1800);
+    return () => clearTimeout(t);
   }, []);
 
+  // Skill input
   const handleAddSkill = (e) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       addSkill();
     }
   };
 
   const addSkill = () => {
-    const trimmed = currentSkills.trim();
-    if (trimmed && !skillsList.includes(trimmed)) {
-      setSkillsList([...skillsList, trimmed]);
-      setCurrentSkills('');
+    const skill = currentSkills.trim();
+    if (skill && !skillsList.includes(skill)) {
+      setSkillsList([...skillsList, skill]);
     }
+    setCurrentSkills("");
   };
 
-  const removeSkill = (skillToRemove) => {
-    setSkillsList(skillsList.filter(skill => skill !== skillToRemove));
+  const removeSkill = (skill) => {
+    setSkillsList(skillsList.filter((s) => s !== skill));
   };
 
-  // ✅ FIXED AI FUNCTION
+  // 🔥 CORE ANALYSIS FUNCTION (FIXED)
   const analyzeSkills = async () => {
-    if (!apiKey) {
-      setError("Gemini API key not configured.");
-      return;
-    }
-
     if (!targetRole || skillsList.length === 0) {
-      setError("Please tell us your target role and current skills.");
+      setError("Please enter a target role and at least one skill.");
       return;
     }
 
-    setError('');
-    setStep('analyzing');
+    if (!apiKey) {
+      setError("API Key missing. Please configure VITE_GEMINI_API_KEY.");
+      return;
+    }
+
+    setError("");
+    setStep("analyzing");
 
     try {
       const prompt = `
@@ -64,131 +80,237 @@ Target Role: ${targetRole}
 Current Skills: ${skillsList.join(", ")}
 
 Rules:
-- If matchScore >= 90 → missingSkills = [], roadmap = [], include jobConnect
-- If matchScore < 90 → include missingSkills + roadmap, jobConnect = []
+- Return STRICT JSON ONLY
+- matchScore: number 0–100
+- If matchScore >= 90:
+  - missingSkills = []
+  - roadmap = []
+  - jobConnect must be populated
+- If matchScore < 90:
+  - missingSkills & roadmap required
+  - jobConnect = []
 
-Return ONLY valid JSON.
+JSON format:
+{
+  "matchScore": 0,
+  "summary": "",
+  "missingSkills": [],
+  "roadmap": [
+    { "week": "Week 1", "action": "", "details": "" }
+  ],
+  "jobConnect": [
+    {
+      "type": "Company",
+      "name": "",
+      "description": "",
+      "action": "Apply Now",
+      "contact": ""
+    }
+  ]
+}
 `;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }]
-          })
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" },
+          }),
         }
       );
 
-      if (!response.ok) throw new Error("Gemini API error");
+      if (!res.ok) throw new Error("API request failed");
 
-      const data = await response.json();
-      let text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error("Empty response");
+      const data = await res.json();
 
-      // ✅ Remove markdown wrappers
-      text = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(text);
+      const raw =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-      setAnalysisResult({
-        matchScore: parsed.matchScore ?? 0,
-        summary: parsed.summary ?? "No summary available",
-        missingSkills: parsed.missingSkills ?? [],
-        roadmap: parsed.roadmap ?? [],
-        jobConnect: parsed.jobConnect ?? []
-      });
+      if (!raw) throw new Error("Invalid AI response");
 
-      setStep('results');
+      const parsed =
+        typeof raw === "string" ? JSON.parse(raw) : raw;
 
+      setAnalysisResult(parsed);
+      setStep("results");
     } catch (err) {
       console.error(err);
       setError("Failed to analyze skills. Please try again.");
-      setStep('input');
+      setStep("input");
     }
   };
 
   const resetApp = () => {
-    setStep('input');
-    setAnalysisResult(null);
-    setTargetRole('');
+    setStep("input");
+    setTargetRole("");
     setSkillsList([]);
+    setAnalysisResult(null);
+    setError("");
   };
-
-  const Logo = () => (
-    <div className="flex items-center gap-3">
-      <div className="bg-indigo-600 p-2 rounded-lg">
-        <Zap className="text-white" size={24} fill="currentColor" />
-      </div>
-      <span className="text-2xl font-bold tracking-tight text-white">
-        Skill<span className="text-indigo-400">Sync</span>
-      </span>
-    </div>
-  );
 
   const isJobReady = analysisResult?.matchScore >= 90;
 
+  // Splash
   if (showSplash) {
     return (
-      <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center text-white">
-        <Logo />
-        <p className="mt-6 text-slate-400 text-lg animate-pulse">
-          Aligning education with reality...
-        </p>
+      <div className="fixed inset-0 bg-slate-950 flex items-center justify-center text-white">
+        <h1 className="text-4xl font-bold">
+          Skill<span className="text-indigo-400">Sync</span>
+        </h1>
       </div>
     );
   }
 
-  /* ✅ FROM HERE DOWN: YOUR ORIGINAL UI — UNCHANGED */
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30 selection:text-white">
-
-      {/* 🔹 NAVBAR */}
-      <nav className="relative z-50 border-b border-white/5 bg-slate-950/50 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-8 h-20 flex items-center justify-between">
-          <div className="cursor-pointer" onClick={resetApp}>
-            <Logo />
-          </div>
-        </div>
+    <div className="min-h-screen bg-slate-950 text-slate-200">
+      {/* NAV */}
+      <nav className="border-b border-white/5 px-8 py-6 flex justify-between">
+        <h2
+          onClick={resetApp}
+          className="text-xl font-bold cursor-pointer"
+        >
+          Skill<span className="text-indigo-400">Sync</span>
+        </h2>
       </nav>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-8 py-16">
+      <main className="max-w-6xl mx-auto px-8 py-16">
 
-        {step === 'input' && (
-          <div className="max-w-4xl mx-auto">
-            {/* INPUT UI — unchanged */}
-            {/* (exact JSX preserved, shortened here for clarity) */}
-            <button onClick={analyzeSkills}
-              className="w-full bg-white text-slate-950 font-bold text-xl py-5 rounded-2xl">
+        {/* ================= INPUT ================= */}
+        {step === "input" && (
+          <div className="max-w-3xl mx-auto space-y-10">
+            <h1 className="text-5xl font-bold text-center text-white">
+              SkillSync Career Analyzer
+            </h1>
+
+            <input
+              value={targetRole}
+              onChange={(e) => setTargetRole(e.target.value)}
+              placeholder="Target Role (e.g. Frontend Developer)"
+              className="w-full p-5 rounded-xl bg-slate-900 border border-slate-700 text-white"
+            />
+
+            <div className="bg-slate-900 p-5 rounded-xl border border-slate-700">
+              <div className="flex flex-wrap gap-3 mb-3">
+                {skillsList.map((s, i) => (
+                  <span
+                    key={i}
+                    className="bg-indigo-500/20 text-indigo-200 px-4 py-2 rounded-full flex items-center gap-2"
+                  >
+                    {s}
+                    <X
+                      size={16}
+                      className="cursor-pointer"
+                      onClick={() => removeSkill(s)}
+                    />
+                  </span>
+                ))}
+              </div>
+
+              <input
+                value={currentSkills}
+                onChange={(e) => setCurrentSkills(e.target.value)}
+                onKeyDown={handleAddSkill}
+                onBlur={addSkill}
+                placeholder="Type a skill and press Enter"
+                className="w-full bg-transparent outline-none text-lg text-white"
+              />
+            </div>
+
+            {error && (
+              <div className="text-red-400 flex items-center gap-2">
+                <AlertCircle /> {error}
+              </div>
+            )}
+
+            <button
+              onClick={analyzeSkills}
+              className="w-full bg-white text-black font-bold py-5 rounded-xl text-xl"
+            >
               Generate Roadmap
             </button>
           </div>
         )}
 
-        {step === 'analyzing' && (
-          <div className="flex flex-col items-center py-32">
-            <Loader2 className="w-16 h-16 text-indigo-400 animate-spin" />
-            <p className="mt-6 text-slate-400">Analyzing the Gap…</p>
-          </div>
-        )}
-
-        {step === 'results' && analysisResult && (
-          <div>
-            <h2 className="text-4xl font-bold">
-              {isJobReady ? "Placement Ready" : "Employability Report"}
+        {/* ================= ANALYZING ================= */}
+        {step === "analyzing" && (
+          <div className="text-center py-32">
+            <Loader2 className="w-16 h-16 animate-spin mx-auto mb-6 text-indigo-400" />
+            <h2 className="text-3xl font-bold text-white">
+              Analyzing Skills…
             </h2>
           </div>
         )}
 
-        {error && (
-          <div className="mt-6 flex items-center gap-3 text-red-400 bg-red-950/30 p-5 rounded-2xl">
-            <AlertCircle size={20} /> {error}
+        {/* ================= RESULTS ================= */}
+        {step === "results" && analysisResult && (
+          <div className="space-y-10">
+            <button
+              onClick={resetApp}
+              className="text-slate-400 flex items-center gap-2"
+            >
+              <ChevronRight className="rotate-180" /> Back
+            </button>
+
+            <h2 className="text-4xl font-bold text-white">
+              {isJobReady ? "Placement Ready" : "Skill Gap Report"}
+            </h2>
+
+            <p className="text-xl">
+              Match Score:{" "}
+              <span className="font-bold text-indigo-400">
+                {analysisResult.matchScore}%
+              </span>
+            </p>
+
+            {!isJobReady && (
+              <>
+                <h3 className="text-xl font-bold text-red-400">
+                  Missing Skills
+                </h3>
+                <ul className="list-disc ml-6">
+                  {analysisResult.missingSkills.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ul>
+
+                <h3 className="text-xl font-bold mt-6">
+                  Roadmap
+                </h3>
+                {analysisResult.roadmap.map((r, i) => (
+                  <div key={i} className="bg-slate-900 p-5 rounded-xl mt-4">
+                    <h4 className="font-bold">{r.week}</h4>
+                    <p>{r.action}</p>
+                    <p className="text-slate-400">{r.details}</p>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {isJobReady && (
+              <>
+                <h3 className="text-xl font-bold text-green-400">
+                  Job Connect
+                </h3>
+                {analysisResult.jobConnect.map((j, i) => (
+                  <a
+                    key={i}
+                    href={`https://${j.contact}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block bg-slate-900 p-5 rounded-xl hover:bg-slate-800"
+                  >
+                    <h4 className="font-bold">{j.name}</h4>
+                    <p className="text-slate-400">{j.description}</p>
+                  </a>
+                ))}
+              </>
+            )}
           </div>
         )}
-
       </main>
     </div>
   );
-};
-
-export default SkillSyncApp;
+}
